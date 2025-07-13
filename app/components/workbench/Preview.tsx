@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { useStore } from '@nanostores/react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '~/components/ui/IconButton';
@@ -92,7 +93,8 @@ export const Preview = memo(() => {
             }}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && validateUrl(url)) {
-                setIframeUrl(url);
+                const sanitizedUrl = DOMPurify.sanitize(url); // Ensure URL is sanitized
+                setIframeUrl(sanitizedUrl);
 
                 if (inputRef.current) {
                   inputRef.current.blur();
