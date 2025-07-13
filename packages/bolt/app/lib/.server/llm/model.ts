@@ -27,7 +27,7 @@ export function getMockModel(options = {}) {
   return createMockModel(options);
 }
 
-export function getOllamaModel(modelName = 'llama3.2') {
+export function getOllamaModel(modelName = 'qwen2.5:3b') {
   return createOllamaModel({ model: modelName });
 }
 

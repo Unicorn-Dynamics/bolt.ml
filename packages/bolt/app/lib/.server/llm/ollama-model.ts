@@ -22,7 +22,7 @@ export interface OllamaOptions {
 }
 
 export function createOllamaModel(options: OllamaOptions = {}) {
-  const { baseURL = 'http://localhost:11434', model = 'llama3.2', temperature = 0.7, maxTokens = 2048 } = options;
+  const { baseURL = 'http://localhost:11434', model = 'qwen2.5:3b', temperature = 0.7, maxTokens = 2048 } = options;
 
   return {
     async *textStream(prompt: string) {
@@ -44,7 +44,10 @@ export function createOllamaModel(options: OllamaOptions = {}) {
         });
 
         if (!response.ok) {
-          throw new Error(`Ollama API error: ${response.statusText}`);
+          const errorText = await response.text().catch(() => 'Unknown error');
+          throw new Error(
+            `Ollama API error: ${response.statusText} (${response.status}). ${errorText}. Make sure Ollama is running with: ollama serve`,
+          );
         }
 
         const reader = response.body?.getReader();

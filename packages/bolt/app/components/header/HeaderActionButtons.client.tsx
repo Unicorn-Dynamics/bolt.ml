@@ -1,49 +1,60 @@
 import { useStore } from '@nanostores/react';
+import { useState } from 'react';
 import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { OpenStackBlitz } from './OpenStackBlitz.client';
+import { Diagnostics } from '~/components/diagnostics/Diagnostics';
 
 interface HeaderActionButtonsProps {}
 
 export function HeaderActionButtons({}: HeaderActionButtonsProps) {
   const showWorkbench = useStore(workbenchStore.showWorkbench);
   const { showChat } = useStore(chatStore);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const canHideChat = showWorkbench || !showChat;
 
   return (
-    <div className="flex">
-      <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden">
-        <Button
-          active={showChat}
-          disabled={!canHideChat}
-          onClick={() => {
-            if (canHideChat) {
-              chatStore.setKey('showChat', !showChat);
-            }
-          }}
-        >
-          <div className="i-bolt:chat text-sm" />
-        </Button>
-        <div className="w-[1px] bg-bolt-elements-borderColor" />
-        <Button
-          active={showWorkbench}
-          onClick={() => {
-            if (showWorkbench && !showChat) {
-              chatStore.setKey('showChat', true);
-            }
+    <>
+      <div className="flex">
+        <div className="flex border border-bolt-elements-borderColor rounded-md overflow-hidden">
+          <Button
+            active={showChat}
+            disabled={!canHideChat}
+            onClick={() => {
+              if (canHideChat) {
+                chatStore.setKey('showChat', !showChat);
+              }
+            }}
+          >
+            <div className="i-bolt:chat text-sm" />
+          </Button>
+          <div className="w-[1px] bg-bolt-elements-borderColor" />
+          <Button
+            active={showWorkbench}
+            onClick={() => {
+              if (showWorkbench && !showChat) {
+                chatStore.setKey('showChat', true);
+              }
 
-            workbenchStore.showWorkbench.set(!showWorkbench);
-          }}
-        >
-          <div className="i-ph:code-bold" />
-        </Button>
+              workbenchStore.showWorkbench.set(!showWorkbench);
+            }}
+          >
+            <div className="i-ph:code-bold" />
+          </Button>
+        </div>
+        <div className="flex ml-2">
+          <OpenStackBlitz />
+        </div>
+        <div className="flex ml-2">
+          <Button onClick={() => setShowDiagnostics(true)}>
+            <div className="i-ph:activity text-sm" title="System Diagnostics" />
+          </Button>
+        </div>
       </div>
-      <div className="flex ml-2">
-        <OpenStackBlitz />
-      </div>
-    </div>
+      <Diagnostics isOpen={showDiagnostics} onClose={() => setShowDiagnostics(false)} />
+    </>
   );
 }
 
