@@ -1,0 +1,131 @@
+#!/usr/bin/env node
+
+/**
+ * Setup script for local AI development
+ * This script helps configure local AI models for development without API keys
+ */
+
+import { execSync } from 'child_process';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+const ENV_FILE = '.env.local';
+
+console.log('🤖 Setting up local AI development environment...\n');
+
+async function checkOllama() {
+  try {
+    const response = await fetch('http://localhost:11434/api/tags');
+    if (response.ok) {
+      const data = await response.json();
+      const models = data.models?.map(m => m.name) || [];
+      console.log('✅ Ollama is running');
+      console.log(`📦 Available models: ${models.join(', ') || 'none'}`);
+      return models;
+    }
+  } catch (error) {
+    console.log('❌ Ollama not running on localhost:11434');
+    return [];
+  }
+}
+
+function updateEnvFile(config) {
+  let envContent = '';
+  
+  if (existsSync(ENV_FILE)) {
+    envContent = readFileSync(ENV_FILE, 'utf8');
+  }
+
+  // Add or update configuration
+  const lines = envContent.split('\n');
+  const newLines = [];
+  const configKeys = Object.keys(config);
+  const existingKeys = new Set();
+
+  // Update existing lines
+  for (const line of lines) {
+    const [key] = line.split('=');
+    if (configKeys.includes(key)) {
+      newLines.push(`${key}=${config[key]}`);
+      existingKeys.add(key);
+    } else {
+      newLines.push(line);
+    }
+  }
+
+  // Add new configuration
+  for (const [key, value] of Object.entries(config)) {
+    if (!existingKeys.has(key)) {
+      newLines.push(`${key}=${value}`);
+    }
+  }
+
+  writeFileSync(ENV_FILE, newLines.join('\n'));
+}
+
+async function main() {
+  const models = await checkOllama();
+  
+  console.log('\n🔧 Configuration options:\n');
+  console.log('1. Mock Model (fastest, no setup required)');
+  console.log('2. Ollama (real AI, requires installation)');
+  console.log('3. Keep existing configuration\n');
+
+  // For automation, we'll set up mock by default
+  const choice = process.argv[2] || '1';
+
+  switch (choice) {
+    case '1': {
+      console.log('🎭 Configuring mock model...');
+      updateEnvFile({
+        'VITE_DEV_MODEL_PROVIDER': 'mock',
+        'VITE_FORCE_LOCAL_MODEL': 'true',
+        'VITE_DISABLE_AUTH': '1'
+      });
+      console.log('✅ Mock model configured! No additional setup required.');
+      break;
+    }
+
+    case '2': {
+      if (models.length === 0) {
+        console.log('⚠️  Ollama not detected. Installing...');
+        console.log('📖 Visit https://ollama.ai for installation instructions');
+        console.log('💡 Quick setup: curl -fsSL https://ollama.ai/install.sh | sh');
+        console.log('🚀 Then run: ollama serve && ollama pull llama3.2');
+      }
+
+      updateEnvFile({
+        'VITE_DEV_MODEL_PROVIDER': 'ollama',
+        'VITE_FORCE_LOCAL_MODEL': 'true',
+        'OLLAMA_MODEL': models[0] || 'llama3.2',
+        'VITE_DISABLE_AUTH': '1'
+      });
+      console.log('✅ Ollama configuration updated!');
+      break;
+    }
+
+    case '3': {
+      console.log('⏭️  Keeping existing configuration');
+      break;
+    }
+
+    default: {
+      console.log('❓ Invalid choice, using mock model as default');
+      updateEnvFile({
+        'VITE_DEV_MODEL_PROVIDER': 'mock',
+        'VITE_FORCE_LOCAL_MODEL': 'true'
+      });
+    }
+  }
+
+  console.log('\n🎉 Setup complete!');
+  console.log('\n💡 Tips:');
+  console.log('• Run `pnpm dev` to start development server');
+  console.log('• Authentication is disabled for local development');
+  console.log('• Switch models by changing VITE_DEV_MODEL_PROVIDER in .env.local');
+  console.log('\n📊 Model comparison:');
+  console.log('Mock:   ⚡ Instant • 📦 No setup • 🎭 Fake responses');
+  console.log('Ollama: 🤖 Real AI • 💾 Local • 🔒 Private');
+}
+
+main().catch(console.error);

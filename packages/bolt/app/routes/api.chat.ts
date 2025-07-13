@@ -2,7 +2,7 @@ import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { actionWithAuth } from '~/lib/.server/auth';
 import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS } from '~/lib/.server/llm/constants';
 import { CONTINUE_PROMPT } from '~/lib/.server/llm/prompts';
-import { streamText, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
+import { streamText, streamTextDev, type Messages, type StreamingOptions } from '~/lib/.server/llm/stream-text';
 import SwitchableStream from '~/lib/.server/llm/switchable-stream';
 import type { Session } from '~/lib/.server/sessions';
 import { AnalyticsAction, AnalyticsTrackEvent, sendEventInternal } from '~/lib/analytics';
@@ -12,7 +12,7 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 async function chatAction({ context, request }: ActionFunctionArgs, session: Session) {
-  const { messages } = await request.json<{ messages: Messages }>();
+  const { messages, personaId } = await request.json<{ messages: Messages; personaId?: string }>();
 
   const stream = new SwitchableStream();
 
@@ -46,15 +46,41 @@ async function chatAction({ context, request }: ActionFunctionArgs, session: Ses
         messages.push({ role: 'assistant', content });
         messages.push({ role: 'user', content: CONTINUE_PROMPT });
 
-        const result = await streamText(messages, context.cloudflare.env, options);
+        // use local models in development
+        const isDev = import.meta.env.DEV || process.env.NODE_ENV === 'development';
+        const forceLocal = process.env.VITE_FORCE_LOCAL_MODEL === 'true';
 
-        return stream.switchSource(result.toAIStream());
+        if (isDev || forceLocal) {
+          const result = await streamTextDev(messages, { personaId });
+          return stream.switchSource(result.pipeAISDKCompatibleStream());
+        } else {
+          const result = await streamText(messages, context.cloudflare.env, options);
+
+          return stream.switchSource(result.toAIStream());
+        }
       },
     };
 
-    const result = await streamText(messages, context.cloudflare.env, options);
+    // use local models in development
+    const isDev = import.meta.env.DEV || process.env.NODE_ENV === 'development';
+    const forceLocal = process.env.VITE_FORCE_LOCAL_MODEL === 'true';
 
-    stream.switchSource(result.toAIStream());
+    if (isDev || forceLocal) {
+      try {
+        const result = await streamTextDev(messages, { personaId });
+        stream.switchSource(result.pipeAISDKCompatibleStream());
+      } catch (error) {
+        console.error('Local model failed, trying production API:', error);
+
+        const result = await streamText(messages, context.cloudflare.env, options);
+
+        stream.switchSource(result.toAIStream());
+      }
+    } else {
+      const result = await streamText(messages, context.cloudflare.env, options);
+
+      stream.switchSource(result.toAIStream());
+    }
 
     return new Response(stream.readable, {
       status: 200,
