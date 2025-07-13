@@ -1,6 +1,7 @@
 import { json, type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { actionWithAuth } from '~/lib/.server/auth';
-import { getDevModel, isOllamaAvailable, getOllamaModels } from '~/lib/.server/llm/model';
+import { getDevModel, isOllamaAvailable } from '~/lib/.server/llm/model';
+import { getOllamaModels } from '~/lib/.server/llm/ollama-model';
 import { getAPIKey } from '~/lib/.server/llm/api-key';
 import { getAvailablePersonas } from '~/lib/.server/llm/prompts';
 import type { Session } from '~/lib/.server/sessions';
@@ -32,7 +33,7 @@ export async function action(args: ActionFunctionArgs) {
 
 async function diagnosticsAction({ context, request }: ActionFunctionArgs, session: Session) {
   const { testIds } = await request.json<{ testIds?: string[] }>();
-  
+
   const tests: DiagnosticTest[] = [
     {
       id: 'auth',
@@ -85,13 +86,13 @@ async function diagnosticsAction({ context, request }: ActionFunctionArgs, sessi
   ];
 
   // filter tests if specific ones requested
-  const testsToRun = testIds ? tests.filter(t => testIds.includes(t.id)) : tests;
-  
+  const testsToRun = testIds ? tests.filter((t) => testIds.includes(t.id)) : tests;
+
   // run each test
   for (const test of testsToRun) {
     const startTime = Date.now();
     test.status = 'running';
-    
+
     try {
       switch (test.id) {
         case 'auth': {
@@ -136,7 +137,7 @@ async function diagnosticsAction({ context, request }: ActionFunctionArgs, sessi
       test.message = error instanceof Error ? error.message : 'Unknown error';
       test.details = { error: String(error) };
     }
-    
+
     test.duration = Date.now() - startTime;
   }
 
@@ -145,9 +146,9 @@ async function diagnosticsAction({ context, request }: ActionFunctionArgs, sessi
     tests: testsToRun,
     summary: {
       total: testsToRun.length,
-      passed: testsToRun.filter(t => t.status === 'passed').length,
-      failed: testsToRun.filter(t => t.status === 'failed').length,
-      warnings: testsToRun.filter(t => t.status === 'warning').length,
+      passed: testsToRun.filter((t) => t.status === 'passed').length,
+      failed: testsToRun.filter((t) => t.status === 'failed').length,
+      warnings: testsToRun.filter((t) => t.status === 'warning').length,
     },
   };
 
@@ -157,7 +158,7 @@ async function diagnosticsAction({ context, request }: ActionFunctionArgs, sessi
 async function testAuthentication(test: DiagnosticTest, session: Session) {
   const isDev = import.meta.env.DEV;
   const authDisabled = import.meta.env.VITE_DISABLE_AUTH;
-  
+
   if (isDev && authDisabled) {
     test.status = 'passed';
     test.message = 'Authentication bypass enabled for development';
@@ -176,7 +177,7 @@ async function testAuthentication(test: DiagnosticTest, session: Session) {
 async function testPersonas(test: DiagnosticTest) {
   try {
     const personas = getAvailablePersonas();
-    
+
     if (personas.length === 0) {
       test.status = 'failed';
       test.message = 'No personas available';
@@ -185,7 +186,7 @@ async function testPersonas(test: DiagnosticTest) {
       test.message = `${personas.length} personas available`;
       test.details = {
         count: personas.length,
-        personas: personas.map(p => ({ id: p.id, name: p.name })),
+        personas: personas.map((p) => ({ id: p.id, name: p.name })),
       };
     }
   } catch (error) {
@@ -199,7 +200,7 @@ async function testModels(test: DiagnosticTest, env: Env) {
   try {
     const forceLocal = process.env.VITE_FORCE_LOCAL_MODEL === 'true';
     const provider = process.env.VITE_DEV_MODEL_PROVIDER || 'auto';
-    
+
     test.details = {
       provider,
       forceLocal,
@@ -208,7 +209,7 @@ async function testModels(test: DiagnosticTest, env: Env) {
 
     if (forceLocal || import.meta.env.DEV) {
       try {
-        const model = await getDevModel();
+        await getDevModel();
         test.status = 'passed';
         test.message = `Local model configured (${provider})`;
         test.details.model = 'Available';
@@ -219,7 +220,7 @@ async function testModels(test: DiagnosticTest, env: Env) {
       }
     } else {
       const apiKey = getAPIKey(env);
-      
+
       if (apiKey) {
         test.status = 'passed';
         test.message = 'API model configured';
@@ -240,7 +241,7 @@ async function testOllama(test: DiagnosticTest) {
   try {
     const baseURL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
     const isAvailable = await isOllamaAvailable(baseURL);
-    
+
     if (isAvailable) {
       const models = await getOllamaModels(baseURL);
       test.status = 'passed';
@@ -269,9 +270,9 @@ async function testMockModel(test: DiagnosticTest) {
   try {
     const { createMockModel } = await import('~/lib/.server/llm/mock-model');
     const mockModel = createMockModel({ delay: 100 });
-    
+
     const result = await mockModel.generate('Test prompt');
-    
+
     if (result.text && result.text.length > 0) {
       test.status = 'passed';
       test.message = 'Mock model working correctly';
@@ -293,7 +294,7 @@ async function testMockModel(test: DiagnosticTest) {
 async function testApiKey(test: DiagnosticTest, env: Env) {
   try {
     const apiKey = getAPIKey(env);
-    
+
     if (apiKey) {
       test.status = 'passed';
       test.message = 'API key configured';
@@ -304,7 +305,7 @@ async function testApiKey(test: DiagnosticTest, env: Env) {
       };
     } else {
       const forceLocal = process.env.VITE_FORCE_LOCAL_MODEL === 'true';
-      
+
       if (forceLocal) {
         test.status = 'warning';
         test.message = 'No API key (local models forced)';
@@ -334,17 +335,17 @@ async function testEnvironment(test: DiagnosticTest) {
   };
 
   const issues = [];
-  
+
   if (!envVars.VITE_DISABLE_AUTH && import.meta.env.DEV) {
     issues.push('Auth not disabled in development');
   }
-  
+
   if (!envVars.VITE_DEV_MODEL_PROVIDER) {
     issues.push('No model provider configured');
   }
 
   test.details = { envVars, issues };
-  
+
   if (issues.length === 0) {
     test.status = 'passed';
     test.message = 'Environment properly configured';

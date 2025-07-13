@@ -65,3 +65,5 @@ export async function getDevModel(config?: Partial<ModelConfig>) {
     }
   }
 }
+export { isOllamaAvailable };
+
